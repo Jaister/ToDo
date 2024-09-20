@@ -6,7 +6,7 @@ use crate::app::App;
 use crate::tarea::Tarea;
 
 fn main() -> io::Result<()> {
-    let mut tareas: Vec<Tarea> = match Tarea::leer_tareas() {
+    let tareas: Vec<Tarea> = match Tarea::leer_tareas() {
         Ok(tareas_leidas) => tareas_leidas,
         Err(e) => panic!("Error al leer las tareas: {}", e),
     };

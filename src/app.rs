@@ -20,14 +20,18 @@ use ratatui::{
 use std::time::Duration;
 use crate::tarea::Tarea;
 use crate::tarea::{generar_id, guardar_json};
-
-#[derive(Debug, Default)]
+/////////////////////////////////
+/// APP
+/////////////////////////////////
+#[derive(Debug)]
 pub struct App {
     opcion: u8,
     exit: bool,
     tareas: Vec<Tarea>,
     state: AppState,
     current_input: String,
+    previous_state: AppState,
+    warning_message: String,
 }
 impl App {
     pub fn tareas(&self) -> &Vec<Tarea> {
@@ -38,6 +42,13 @@ impl App {
     }
     pub fn tareas_mut(&mut self) -> &mut Vec<Tarea> {
         &mut self.tareas
+    }
+    pub fn set_warning(&mut self) {
+        if self.state == AppState::Warning {
+            return;
+        }
+        self.previous_state = self.state;
+        self.state = AppState::Warning;
     }
     /// runs the application's main loop until the user quits
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -50,6 +61,8 @@ impl App {
                     AppState::CrearTarea => self.handle_create()?,
                     AppState::VerTareas => self.handle_ver_tareas()?,
                     AppState::CompletarTarea => self.handle_completar_tarea()?,
+                    AppState::Salir => self.exit(),
+                    AppState::Warning => self.handle_warning()?,
                     _ => {}
                 }
             }
@@ -64,11 +77,13 @@ impl App {
             if let Event::Key(key_event) = event::read()? {
                 if key_event.kind == KeyEventKind::Press {
                     match key_event.code {
-                        KeyCode::Char('q') => self.exit(),
                         KeyCode::Left => self.decrementar_opcion(),
                         KeyCode::Right => self.aumentar_opcion(),
                         KeyCode::Enter => self.select_main_menu(),
                         KeyCode::Esc => self.exit(),
+                        KeyCode::Down => {
+                            self.state = self.previous_state;
+                        }
                         _ => {}
                     }
                 }
@@ -80,13 +95,11 @@ impl App {
         if let Event::Key(key_event) = event::read()? {
             if key_event.kind == KeyEventKind::Press {
                 match key_event.code {
-                    KeyCode::Char('q') => self.exit(),
                     KeyCode::Left => self.decrementar_opcion(),
                     KeyCode::Right => self.aumentar_opcion(),
                     KeyCode::Esc => self.exit(),
                     KeyCode::Enter => {
                         self.datos_tarea();
-                        self.state = AppState::Menu;
                         self.current_input.clear();
                     }
                     KeyCode::Backspace => {
@@ -94,6 +107,9 @@ impl App {
                     }
                     KeyCode::Char(c) => {
                         self.current_input.push(c);
+                    }
+                    KeyCode::Down => {
+                        self.state = self.previous_state;
                     }
                     _ => {}
                 }
@@ -105,12 +121,14 @@ impl App {
         if let Event::Key(key_event) = event::read()? {
             if key_event.kind == KeyEventKind::Press {
                 match key_event.code {
-                    KeyCode::Char('q') => self.exit(),
                     KeyCode::Left => self.decrementar_opcion(),
                     KeyCode::Right => self.aumentar_opcion(),
                     KeyCode::Esc => self.exit(),
                     KeyCode::Enter => {
                         self.state = AppState::Menu;
+                    }
+                    KeyCode::Down => {
+                        self.state = self.previous_state;
                     }
                     _ => {}
                 }
@@ -122,19 +140,35 @@ impl App {
         if let Event::Key(key_event) = event::read()? {
             if key_event.kind == KeyEventKind::Press {
                 match key_event.code {
-                    KeyCode::Char('q') => self.exit(),
                     KeyCode::Left => self.decrementar_opcion(),
                     KeyCode::Right => self.aumentar_opcion(),
                     KeyCode::Esc => self.exit(),
                     KeyCode::Enter => {
                         self.estado_tarea();
-                        self.state = AppState::Menu;
+                        self.current_input.clear();
                     }
                     KeyCode::Backspace => {
                         self.current_input.pop();
                     }
                     KeyCode::Char(c) => {
                         self.current_input.push(c);
+                    }
+                    KeyCode::Down => {
+                        self.state = self.previous_state;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
+    fn handle_warning(&mut self) -> io::Result<()> {
+        if let Event::Key(key_event) = event::read()? {
+            if key_event.kind == KeyEventKind::Press {
+                match key_event.code {
+                    KeyCode::Esc => self.exit(),
+                    KeyCode::Enter => {
+                        self.state = self.previous_state;
                     }
                     _ => {}
                 }
@@ -190,22 +224,20 @@ impl App {
             }
             5 => {
                 //Salida del programa
-                println!("{}","Saliendo...");
                 self.exit();}
             _ => {
-                self.state = AppState::Menu;
-                println!("{}","Opcion no valida");  
+                self.set_warning();
             }
         }
     }
-    /*
-    CREAR TAREA
-    */
+    ///////////////////////////////////////////
+    /// DATOS TAREA
+    ///////////////////////////////////////////
     fn datos_tarea(&mut self) -> Tarea{
         let mut descripcion: String = String::new();
         descripcion =  self.current_input.clone();
         if descripcion.is_empty(){
-            println!("{}","La descripcion no puede estar vacia");
+            self.set_warning();
             return Tarea::default();
         }
     
@@ -216,19 +248,21 @@ impl App {
         }
 
     }
+    ///////////////////////////////////////////
+    /// ESTADO TAREA
+    ///////////////////////////////////////////
     fn estado_tarea(&mut self){
-        println!("{}","Ingrese el id de la tarea a completar");
         let mut id: String = String::new();
         loop{
         id.clear();
         id = self.current_input.clone();
-        if id.is_empty() || id.parse::<u32>().is_err(){
-            println!("{}","El ID ha de ser un entero");
+        if id.is_empty() || id.parse::<u32>().is_err(){ //NO ES UN ENTERO
+            self.set_warning();
             return;
         }
         let id: u32 = id.parse().unwrap();
-        if id > self.tareas.clone().last().unwrap().id(){
-            println!("{}","Introduzca un ID valido");
+        if id > self.tareas.clone().last().unwrap().id(){ // ID NO EXISTE PORQUE ES MAYOR AL ULTIMO ID
+            self.set_warning();
             continue;
         }
         let mut tarea_encontrada = false;
@@ -246,16 +280,21 @@ impl App {
                 }
             }
         }
-        if !tarea_encontrada{
-            println!("{}","Tarea no encontrada");
+        if !tarea_encontrada{ // ID NO EXISTE
+            self.set_warning();
             continue;
         }
         else{
-            guardar_json(&mut self.tareas);
-            break;
+            match guardar_json(&mut self.tareas){
+                Ok(()) => break,
+                Err(e) => panic!("Error al guardar las tareas: {}", e),
+            }
         }
         }
     }
+    ///////////////////////////////////////////
+    /// MENU RENDER
+    ///////////////////////////////////////////
     fn render_menu(&self, area: Rect, buf: &mut Buffer) {
         let title = Title::from(" Menu de Tareas ".bold());
         let instructions = Title::from(Line::from(vec![
@@ -263,8 +302,8 @@ impl App {
             " Opcion ".into(),
             "<Dcha>".blue().bold(),
             " Quit ".into(),
-            "<Q> ".blue().bold(),
-        ]));
+            "<ESC> ".blue().bold(),
+        ]));        
         let block = Block::bordered()
             .title(title.alignment(Alignment::Center))
             .title(
@@ -272,7 +311,8 @@ impl App {
                     .alignment(Alignment::Center)
                     .position(Position::Bottom),
             )
-            .border_set(border::THICK);
+            .border_set(border::THICK)
+            .border_style(ratatui::style::Style::default().fg(self.color_logic()));
 
         let counter_text = Text::from(vec![Line::from(vec![
             "Opcion: ".into(),
@@ -284,23 +324,25 @@ impl App {
             .block(block)
             .render(area, buf);
     }
-
+    ///////////////////////////////////////////
+    /// CREAR TAREA RENDER
+    ///////////////////////////////////////////
     fn render_crear_tarea(&self, area: Rect, buf: &mut Buffer) {
         // Define a block with a title and border
         let block = Block::default()
             .title(" Crear Nueva Tarea ".bold())
             .borders(ratatui::widgets::Borders::ALL)
-            .border_style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan));
+            .border_style(ratatui::style::Style::default().fg(self.color_logic()));
     
         // Define the prompt text
         let prompt_text = Text::from("Descripción de la tarea:".bold());
     
         // Define the input text (this could be dynamic if capturing input)
         let input_text = Text::from(self.current_input.clone()); // Assuming you have an `input_description` field
-    
         // Render the prompt text
         let prompt_paragraph = Paragraph::new(prompt_text)
             .block(Block::default().borders(ratatui::widgets::Borders::NONE))
+            //.block(warning)
             .alignment(Alignment::Left);
         prompt_paragraph.render(area, buf);
     
@@ -315,12 +357,13 @@ impl App {
             .block(block)
             .alignment(Alignment::Left);
         input_paragraph.render(input_area, buf);
-    
+        buf.set_style(area, ratatui::style::Style::default().bg(self.color_logic()));
         // Optional: Draw a cursor or highlight the input area
-        buf.set_style(area, ratatui::style::Style::default().bg(ratatui::style::Color::DarkGray));
         buf.set_style(input_area, ratatui::style::Style::default().bg(ratatui::style::Color::Black));
     }
-    
+    ///////////////////////////////////////////
+    /// VER TAREAS RENDER (Should be warning safe)
+    ///////////////////////////////////////////
 
     fn render_ver_tareas(&self, area: Rect, buf: &mut Buffer) {
         let block = Block::default()
@@ -362,13 +405,15 @@ impl App {
         buf.set_style(area, ratatui::style::Style::default().bg(ratatui::style::Color::DarkGray));
         buf.set_style(input_area, ratatui::style::Style::default().bg(ratatui::style::Color::Black));
     }
-
+    ///////////////////////////////////////////
+    /// COMPLETAR TAREA RENDER
+    ///////////////////////////////////////////
     fn render_completar_tarea(&self, area: Rect, buf: &mut Buffer) {
         // Define a block with a title and border
         let block = Block::default()
         .title(" Des/completar tarea ".bold())
         .borders(ratatui::widgets::Borders::ALL)
-        .border_style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan));
+        .border_style(ratatui::style::Style::default().fg(self.color_logic()));
 
         // Define the prompt text
         let prompt_text = Text::from("Id de la tarea:".bold());
@@ -395,7 +440,7 @@ impl App {
         input_paragraph.render(input_area, buf);
 
         // Optional: Draw a cursor or highlight the input area
-        buf.set_style(area, ratatui::style::Style::default().bg(ratatui::style::Color::DarkGray));
+        buf.set_style(area, ratatui::style::Style::default().bg(self.color_logic()));
         buf.set_style(input_area, ratatui::style::Style::default().bg(ratatui::style::Color::Black));
     }
 
@@ -405,7 +450,10 @@ impl App {
 
     fn render_salir(&self, area: Rect, buf: &mut Buffer) {
         // Implement the rendering logic for Salir state
-    }    
+    }
+    fn color_logic(&self) -> ratatui::style::Color{
+        if self.state == AppState::Warning {ratatui::style::Color::Red} else {ratatui::style::Color::Cyan}
+    }
 }
 ////////////////////////////////////////////////////////////
 
@@ -417,10 +465,38 @@ enum AppState {
     CompletarTarea,
     EliminarTarea,
     Salir,
+    Warning,
 }
 impl Default for AppState {
     fn default() -> Self {
         AppState::Menu // Set Menu as the default state
+    }
+}
+impl PartialEq for AppState {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (AppState::Menu, AppState::Menu) => true,
+            (AppState::CrearTarea, AppState::CrearTarea) => true,
+            (AppState::VerTareas, AppState::VerTareas) => true,
+            (AppState::CompletarTarea, AppState::CompletarTarea) => true,
+            (AppState::EliminarTarea, AppState::EliminarTarea) => true,
+            (AppState::Salir, AppState::Salir) => true,
+            (AppState::Warning, AppState::Warning) => true,
+            _ => false,
+        }
+    }
+}
+impl Default for App {
+    fn default() -> Self {
+        App {
+            opcion: 0,
+            exit: false,
+            tareas: Vec::new(),
+            state: AppState::default(),
+            current_input: String::new(),
+            previous_state: AppState::default(),
+            warning_message: String::new(),
+        }
     }
 }
 ////////////////////////////////////////////////////////////
@@ -428,6 +504,17 @@ impl Default for AppState {
 ////////////////////////////////////////////////////////////
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        if self.state == AppState::Warning{
+            match self.previous_state {
+                AppState::Menu => self.render_menu(area, buf),
+                AppState::CrearTarea => self.render_crear_tarea(area, buf),
+                AppState::VerTareas => self.render_ver_tareas(area, buf),
+                AppState::CompletarTarea => self.render_completar_tarea(area, buf),
+                AppState::Salir => self.render_salir(area, buf),
+                _ => {}
+            }
+        }
+        else{
         match self.state {
             AppState::Menu => self.render_menu(area, buf),
             AppState::CrearTarea => self.render_crear_tarea(area, buf),
@@ -435,6 +522,8 @@ impl Widget for &App {
             AppState::CompletarTarea => self.render_completar_tarea(area, buf),
             AppState::EliminarTarea => self.render_eliminar_tarea(area, buf),
             AppState::Salir => self.render_salir(area, buf),
+            _ => {}
         }
+    }
     }
 }
