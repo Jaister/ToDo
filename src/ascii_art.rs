@@ -1,27 +1,3 @@
-use std::io;
-use std::io::Write;
-use std::fs;
-use std::fmt;
-use std::string;
-use serde_json::{Result, Value, Error,json};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use ratatui::{
-    buffer::Buffer,
-    layout::{Alignment, Rect},
-    style::{Stylize ,Color,Style},
-    symbols::border,
-    text::{Line, Text,Span},
-    widgets::{
-        block::{Position, Title},
-        Block, Paragraph, Widget,
-        Borders,
-    },
-    DefaultTerminal, Frame,
-};
-use std::time::Duration;
-use crate::tarea::Tarea;
-use crate::tarea::{generar_id, guardar_json};
-
 #[derive(Debug)]
 pub struct Animation {
     index: u8,

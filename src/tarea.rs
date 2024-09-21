@@ -1,24 +1,6 @@
-use std::io;
-use std::io::Write;
 use std::fs;
 use std::fmt;
-use std::string;
 use serde_json::{Result, Value, Error,json};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use ratatui::{
-    buffer::Buffer,
-    layout::{Alignment, Rect},
-    style::Stylize,
-    symbols::border,
-    text::{Line, Text},
-    widgets::{
-        block::{Position, Title},
-        Block, Paragraph, Widget,
-    },
-    DefaultTerminal, Frame,
-};
-use std::time::Duration;
-
 #[derive(Debug, Default)]
 pub struct Tarea {
     id: u32,
@@ -45,7 +27,7 @@ impl Tarea{
             completada: false,
         };
         tareas.push(tarea.clone());
-        guardar_json(tareas);
+        let _ = guardar_json(tareas);
         Ok(tarea)   
     }
     pub fn leer_tareas() -> serde_json::Result<Vec<Tarea>>{
@@ -138,19 +120,4 @@ pub fn guardar_json(tareas: &mut Vec<Tarea>) -> serde_json::Result<()>{
         let tareas_string = serde_json::to_string_pretty(&json_array)?;
         fs::write("tareas.json", tareas_string).map_err(|e| serde_json::Error::io(e))?;
         Ok(()) 
-}
-pub fn eliminar_tarea(tareas: &mut Vec<Tarea>, id: u32) -> serde_json::Result<Tarea>{
-    let mut tarea_encontrada = false;
-    for (index, tarea) in tareas.iter().enumerate(){
-        if tarea.id == id{
-            tareas.remove(index);
-            tarea_encontrada = true;
-            break;
-        }
-    }
-    if !tarea_encontrada{
-        panic!("Tarea no encontrada");
-    }
-    guardar_json(tareas);
-    Ok(tareas[1].clone())
 }

@@ -1,9 +1,4 @@
-use core::ascii;
 use std::io;
-use std::io::Write;
-use std::fs;
-use std::fmt;
-use std::string;
 use serde_json::{Result, Value, Error,json};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
@@ -40,7 +35,7 @@ pub struct App {
 impl App {
     fn draw(&self, frame: &mut ratatui::Frame) {
         // This is where you define what to render
-        let area = frame.size(); // Get the available area to draw
+        let area = frame.area(); // Get the available area to draw
         frame.render_widget(self, area); // Render the app itself
     }
     
@@ -120,10 +115,10 @@ impl App {
                     KeyCode::Esc => self.exit(),
                     KeyCode::Enter => {
                         match self.datos_tarea(){
-                            Ok(tarea) => {
+                            Ok(_tarea) => {
                                 self.state = AppState::Menu;
                             }
-                            Err(e) => {
+                            Err(_e) => {
                                 self.set_warning();
                             }
                         }
@@ -172,7 +167,7 @@ impl App {
                             Ok(()) => {
                                 self.state = AppState::Menu;
                             }
-                            Err(e) => {
+                            Err(_e) => {
                                 self.set_warning();
                             }
                         }
@@ -203,7 +198,7 @@ impl App {
                             Ok(()) => {
                                 self.state = AppState::Menu;
                             }
-                            Err(e) => {
+                            Err(_e) => {
                                 self.set_warning();
                             }
                         }
@@ -279,8 +274,7 @@ impl App {
     /// DATOS TAREA
     ///////////////////////////////////////////
     fn datos_tarea(&mut self) -> io::Result<Tarea>{
-        let mut descripcion: String = String::new();
-        descripcion =  self.current_input.clone();
+        let descripcion =  self.current_input.clone();
         if descripcion.is_empty(){
             self.set_warning();
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "Descripción vacía")); // Proper io::Error
@@ -290,7 +284,7 @@ impl App {
         let id = generar_id(&self.tareas); //Cambiar a last fetched id + 1
         match Tarea::crear_tarea(id, descripcion,&mut self.tareas){
             Ok(tarea) => Ok(tarea),
-            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput, "Error al crear Tarea")), // Proper io::Error
+            Err(_e) => Err(io::Error::new(io::ErrorKind::InvalidInput, "Error al crear Tarea")), // Proper io::Error
             }
 
     }
@@ -374,7 +368,7 @@ impl App {
     /// MENU RENDER
     ///////////////////////////////////////////
     fn render_menu(&self, area: Rect, buf: &mut Buffer) {
-        let mut title = Title::from(" Menu de Tareas ".bold());
+        let mut title = Title::default();
         match self.opcion{
             1 => {
                 title = Title::from(" Crear Tarea ".bold());
