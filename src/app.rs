@@ -1,3 +1,4 @@
+use core::ascii;
 use std::io;
 use std::io::Write;
 use std::fs;
@@ -8,18 +9,20 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
-    style::Stylize,
+    style::{Stylize ,Color,Style},
     symbols::border,
-    text::{Line, Text},
+    text::{Line, Text,Span},
     widgets::{
         block::{Position, Title},
         Block, Paragraph, Widget,
+        Borders,
     },
     DefaultTerminal, Frame,
 };
-use std::time::Duration;
 use crate::tarea::Tarea;
 use crate::tarea::{generar_id, guardar_json};
+use crate::ascii_art::Animation;
+use std::time::{Duration, Instant};
 /////////////////////////////////
 /// APP
 /////////////////////////////////
@@ -32,13 +35,23 @@ pub struct App {
     current_input: String,
     previous_state: AppState,
     warning_message: String,
+    animation: Animation,
 }
 impl App {
+    fn draw(&self, frame: &mut ratatui::Frame) {
+        // This is where you define what to render
+        let area = frame.size(); // Get the available area to draw
+        frame.render_widget(self, area); // Render the app itself
+    }
+    
     pub fn tareas(&self) -> &Vec<Tarea> {
         &self.tareas
     }
     pub fn set_tareas(&mut self, new_tareas: Vec<Tarea>) {
         self.tareas = new_tareas;
+    }
+    pub fn set_animation(&mut self, new_animation: Animation) {
+        self.animation = new_animation;
     }
     pub fn tareas_mut(&mut self) -> &mut Vec<Tarea> {
         &mut self.tareas
@@ -52,8 +65,10 @@ impl App {
     }
     /// runs the application's main loop until the user quits
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        let mut last_frame_time = Instant::now();
+        let frame_duration = Duration::from_nanos(300); // Adjust as needed
+    
         while !self.exit {
-            terminal.draw(|frame| self.draw(frame))?;
             // Non-blocking poll for events with timeout
             if crossterm::event::poll(Duration::from_millis(200))? {
                 match self.state {
@@ -61,18 +76,25 @@ impl App {
                     AppState::CrearTarea => self.handle_create()?,
                     AppState::VerTareas => self.handle_ver_tareas()?,
                     AppState::CompletarTarea => self.handle_completar_tarea()?,
-                    AppState::Salir => self.exit(),
                     AppState::Warning => self.handle_warning()?,
+                    AppState::EliminarTarea => self.handle_eliminar_tarea()?,
                     _ => {}
                 }
             }
+    
+            // Check if it's time to update the frame
+            if last_frame_time.elapsed() >= frame_duration {
+                terminal.draw(|frame| self.draw(frame))?; // Draw the current frame
+                last_frame_time = Instant::now(); // Reset the timer
+                if self.state == AppState::Menu {
+                    self.animation.next();
+                }
+            }
         }
+    
         Ok(())
     }
-    fn draw(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
-    }
-
+    
     fn handle_menu(&mut self) -> io::Result<()> {
             if let Event::Key(key_event) = event::read()? {
                 if key_event.kind == KeyEventKind::Press {
@@ -95,11 +117,17 @@ impl App {
         if let Event::Key(key_event) = event::read()? {
             if key_event.kind == KeyEventKind::Press {
                 match key_event.code {
-                    KeyCode::Left => self.decrementar_opcion(),
-                    KeyCode::Right => self.aumentar_opcion(),
                     KeyCode::Esc => self.exit(),
                     KeyCode::Enter => {
-                        self.datos_tarea();
+                        match self.datos_tarea(){
+                            Ok(tarea) => {
+                                self.state = AppState::Menu;
+                            }
+                            Err(e) => {
+                                self.set_warning();
+                            }
+                        }
+
                         self.current_input.clear();
                     }
                     KeyCode::Backspace => {
@@ -121,8 +149,6 @@ impl App {
         if let Event::Key(key_event) = event::read()? {
             if key_event.kind == KeyEventKind::Press {
                 match key_event.code {
-                    KeyCode::Left => self.decrementar_opcion(),
-                    KeyCode::Right => self.aumentar_opcion(),
                     KeyCode::Esc => self.exit(),
                     KeyCode::Enter => {
                         self.state = AppState::Menu;
@@ -140,11 +166,47 @@ impl App {
         if let Event::Key(key_event) = event::read()? {
             if key_event.kind == KeyEventKind::Press {
                 match key_event.code {
-                    KeyCode::Left => self.decrementar_opcion(),
-                    KeyCode::Right => self.aumentar_opcion(),
                     KeyCode::Esc => self.exit(),
                     KeyCode::Enter => {
-                        self.estado_tarea();
+                        match self.estado_tarea() {
+                            Ok(()) => {
+                                self.state = AppState::Menu;
+                            }
+                            Err(e) => {
+                                self.set_warning();
+                            }
+                        }
+                        self.current_input.clear();
+                    }
+                    KeyCode::Backspace => {
+                        self.current_input.pop();
+                    }
+                    KeyCode::Char(c) => {
+                        self.current_input.push(c);
+                    }
+                    KeyCode::Down => {
+                        self.state = self.previous_state;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
+    fn handle_eliminar_tarea(&mut self) -> io::Result<()> {
+        if let Event::Key(key_event) = event::read()? {
+            if key_event.kind == KeyEventKind::Press {
+                match key_event.code {
+                    KeyCode::Esc => self.exit(),
+                    KeyCode::Enter => {
+                        match self.eliminar_tarea() {
+                            Ok(()) => {
+                                self.state = AppState::Menu;
+                            }
+                            Err(e) => {
+                                self.set_warning();
+                            }
+                        }
                         self.current_input.clear();
                     }
                     KeyCode::Backspace => {
@@ -203,24 +265,7 @@ impl App {
                 self.state = AppState::CompletarTarea;
             }
             4 => {
-                //Eliminar tarea
-                /*println!("{}","Ingrese el id de la tarea a eliminar");
-                let mut id: String = String::new();
-                loop{
-                    id.clear();
-                    let id: u32 = entrada_opcion(&mut id); arreglar
-                    if id > self.tareas.last().unwrap().id{
-                        println!("{}","Introduzca un ID valido");
-                        continue;
-                    }
-                    match eliminar_tarea(&mut self.tareas, id){
-                        Ok(tarea) => {
-                            println!("{}","Tarea eliminada");
-                            break;
-                        }
-                        Err(e) => panic!("Error al eliminar la tarea: {}", e),
-                    }
-                }*/
+                self.state = AppState::EliminarTarea;
             }
             5 => {
                 //Salida del programa
@@ -233,32 +278,33 @@ impl App {
     ///////////////////////////////////////////
     /// DATOS TAREA
     ///////////////////////////////////////////
-    fn datos_tarea(&mut self) -> Tarea{
+    fn datos_tarea(&mut self) -> io::Result<Tarea>{
         let mut descripcion: String = String::new();
         descripcion =  self.current_input.clone();
         if descripcion.is_empty(){
             self.set_warning();
-            return Tarea::default();
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Descripción vacía")); // Proper io::Error
+            
         }
     
         let id = generar_id(&self.tareas); //Cambiar a last fetched id + 1
         match Tarea::crear_tarea(id, descripcion,&mut self.tareas){
-            Ok(tarea) => tarea,
-            Err(e) => panic!("Error al crear la tarea: {}", e),
-        }
+            Ok(tarea) => Ok(tarea),
+            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput, "Error al crear Tarea")), // Proper io::Error
+            }
 
     }
     ///////////////////////////////////////////
     /// ESTADO TAREA
     ///////////////////////////////////////////
-    fn estado_tarea(&mut self){
+    fn estado_tarea(&mut self) -> io::Result<()>{
         let mut id: String = String::new();
         loop{
         id.clear();
         id = self.current_input.clone();
         if id.is_empty() || id.parse::<u32>().is_err(){ //NO ES UN ENTERO
             self.set_warning();
-            return;
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Error al cambiar el estado de la Tarea")); // Proper io::Error
         }
         let id: u32 = id.parse().unwrap();
         if id > self.tareas.clone().last().unwrap().id(){ // ID NO EXISTE PORQUE ES MAYOR AL ULTIMO ID
@@ -271,11 +317,9 @@ impl App {
                 tarea_encontrada = true;
                 if tarea.completada(){
                     tarea.descompletar();
-                    println!("{}","Tarea descompletada");
                     break;
                 }else{
                     tarea.completar();
-                    println!("{}","Tarea completada");
                     break;
                 }
             }
@@ -286,7 +330,41 @@ impl App {
         }
         else{
             match guardar_json(&mut self.tareas){
-                Ok(()) => break,
+                Ok(()) => return Ok(()),
+                Err(e) => panic!("Error al guardar las tareas: {}", e),
+            }
+        }
+        }
+    }
+    fn eliminar_tarea(&mut self) -> io::Result<()>{
+        let mut id: String = String::new();
+        loop{
+        id.clear();
+        id = self.current_input.clone();
+        if id.is_empty() || id.parse::<u32>().is_err(){ //NO ES UN ENTERO
+            self.set_warning();
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Error al eliminar la Tarea")); // Proper io::Error
+        }
+        let id: u32 = id.parse().unwrap();
+        if id > self.tareas.clone().last().unwrap().id(){ // ID NO EXISTE PORQUE ES MAYOR AL ULTIMO ID
+            self.set_warning();
+            continue;
+        }
+        let mut tarea_encontrada = false;
+        for tarea in &mut self.tareas{
+            if tarea.id() == id{
+                tarea_encontrada = true;
+                self.tareas.retain(|x| x.id() != id);
+                break;
+            }
+        }
+        if !tarea_encontrada{ // ID NO EXISTE
+            self.set_warning();
+            continue;
+        }
+        else{
+            match guardar_json(&mut self.tareas){
+                Ok(()) => return Ok(()),
                 Err(e) => panic!("Error al guardar las tareas: {}", e),
             }
         }
@@ -296,14 +374,31 @@ impl App {
     /// MENU RENDER
     ///////////////////////////////////////////
     fn render_menu(&self, area: Rect, buf: &mut Buffer) {
-        let title = Title::from(" Menu de Tareas ".bold());
+        let mut title = Title::from(" Menu de Tareas ".bold());
+        match self.opcion{
+            1 => {
+                title = Title::from(" Crear Tarea ".bold());
+            }
+            2 => {
+                title = Title::from(" Ver Tareas ".bold());
+            }
+            3 => {
+                title = Title::from(" Completar/Descompletar Tarea ".bold());
+            }
+            4 => {
+                title = Title::from(" Eliminar Tarea ".bold());
+            }
+            _ => {
+                title = Title::from(" Menu de Tareas ".bold());
+            }
+        }
         let instructions = Title::from(Line::from(vec![
             "<Izda>".blue().bold(),
             " Opcion ".into(),
             "<Dcha>".blue().bold(),
             " Quit ".into(),
             "<ESC> ".blue().bold(),
-        ]));        
+        ]));       
         let block = Block::bordered()
             .title(title.alignment(Alignment::Center))
             .title(
@@ -323,6 +418,18 @@ impl App {
             .centered()
             .block(block)
             .render(area, buf);
+        let ascii_art = Animation::print_ascii_art(&self.animation);
+        let ascii_area = Rect {
+            x: area.x,
+            y: area.height/3,
+            width: area.width,
+            height: area.height - 3,
+        };
+        let ascii_art_text = Text::from(ascii_art);
+        Paragraph::new(ascii_art_text)
+            .block(Block::default().borders(ratatui::widgets::Borders::NONE))
+            .alignment(Alignment::Center)
+            .render(ascii_area, buf);
     }
     ///////////////////////////////////////////
     /// CREAR TAREA RENDER
@@ -402,7 +509,7 @@ impl App {
         input_paragraph.render(input_area, buf);
     
         // Optional: Draw a cursor or highlight the input area
-        buf.set_style(area, ratatui::style::Style::default().bg(ratatui::style::Color::DarkGray));
+        buf.set_style(area, ratatui::style::Style::default().bg(ratatui::style::Color::Cyan));
         buf.set_style(input_area, ratatui::style::Style::default().bg(ratatui::style::Color::Black));
     }
     ///////////////////////////////////////////
@@ -445,15 +552,83 @@ impl App {
     }
 
     fn render_eliminar_tarea(&self, area: Rect, buf: &mut Buffer) {
-        // Implement the rendering logic for EliminarTarea state
-    }
+                // Define a block with a title and border
+        let block = Block::default()
+        .title(" Eliminar tarea ".bold())
+        .borders(ratatui::widgets::Borders::ALL)
+        .border_style(ratatui::style::Style::default().fg(self.color_logic()));
 
-    fn render_salir(&self, area: Rect, buf: &mut Buffer) {
-        // Implement the rendering logic for Salir state
+        // Define the prompt text
+        let prompt_text = Text::from("Id de la tarea:".bold());
+
+        // Define the input text (this could be dynamic if capturing input)
+        let input_text = Text::from(self.current_input.clone()); // Assuming you have an `input_description` field
+
+        // Render the prompt text
+        let prompt_paragraph = Paragraph::new(prompt_text)
+            .block(Block::default().borders(ratatui::widgets::Borders::NONE))
+            .alignment(Alignment::Left);
+        prompt_paragraph.render(area, buf);
+
+        // Render the input text below the prompt
+        let input_area = Rect {
+            x: area.x,
+            y: area.y + 2, // Position the input text a bit below the prompt
+            width: area.width,
+            height: area.height - 2,
+        };
+        let input_paragraph = Paragraph::new(input_text)
+            .block(block)
+            .alignment(Alignment::Left);
+        input_paragraph.render(input_area, buf);
+
+        // Optional: Draw a cursor or highlight the input area
+        buf.set_style(area, ratatui::style::Style::default().bg(self.color_logic()));
+        buf.set_style(input_area, ratatui::style::Style::default().bg(ratatui::style::Color::Black));
     }
     fn color_logic(&self) -> ratatui::style::Color{
-        if self.state == AppState::Warning {ratatui::style::Color::Red} else {ratatui::style::Color::Cyan}
+        if self.state == AppState::Warning {ratatui::style::Color::LightRed} else {ratatui::style::Color::Cyan}
     }
+    fn render_warning(&self, area: Rect, buf: &mut Buffer) {
+        // Calculate dimensions of the warning box (e.g., take 25% of width and 25% of height)
+        let box_width = area.width / 4;
+        let box_height = area.height / 4;
+
+        // Center the warning box in the middle of the terminal
+        let warning_area = Rect {
+            x: (area.width - box_width) / 2,  // Center horizontally
+            y: (area.height - box_height) / 2,  // Center vertically
+            width: box_width,
+            height: box_height,
+        };
+
+        // Create the main warning message and the "Press 'q' to dismiss" text
+        let text = vec![
+            Line::from(Span::styled(self.warning_message.clone(), Style::default().fg(Color::White).bold())),  // Main warning message
+            Line::from(Span::raw("")),  // Empty line for spacing
+            Line::from(Span::styled("Press 'ENTER' to dismiss", Style::default().fg(Color::White))),  // Bottom message
+            Line::from(Span::styled("OR", Style::default().fg(Color::White))),  // Bottom message
+            Line::from(Span::styled("Press 'ESC' to exit", Style::default().fg(Color::White))),  // Bottom message
+        ];
+
+        // Create the paragraph with both the warning message and the "q" message at the bottom
+        let warning = Paragraph::new(Text::from(text))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::White))  // Border styling
+            )
+            .alignment(Alignment::Center);  // Center the text blocks vertically
+
+        // Render the warning box
+        warning.render(warning_area, buf);
+
+        // Set the background style of the warning box
+        buf.set_style(warning_area, Style::default().bg(self.color_logic()));
+    }
+
+    
+    
 }
 ////////////////////////////////////////////////////////////
 
@@ -464,7 +639,6 @@ enum AppState {
     VerTareas,
     CompletarTarea,
     EliminarTarea,
-    Salir,
     Warning,
 }
 impl Default for AppState {
@@ -480,7 +654,6 @@ impl PartialEq for AppState {
             (AppState::VerTareas, AppState::VerTareas) => true,
             (AppState::CompletarTarea, AppState::CompletarTarea) => true,
             (AppState::EliminarTarea, AppState::EliminarTarea) => true,
-            (AppState::Salir, AppState::Salir) => true,
             (AppState::Warning, AppState::Warning) => true,
             _ => false,
         }
@@ -495,10 +668,16 @@ impl Default for App {
             state: AppState::default(),
             current_input: String::new(),
             previous_state: AppState::default(),
-            warning_message: String::new(),
+            warning_message: WARNING_MESSAGES[0].to_string(),
+            animation: Animation::default(),
         }
     }
 }
+const WARNING_MESSAGES: [&'static str; 3] = [
+    "Opción no válida",
+    "ID no válido",
+    "No hay tareas para mostrar",
+];
 ////////////////////////////////////////////////////////////
 /// RENDER
 ////////////////////////////////////////////////////////////
@@ -510,9 +689,9 @@ impl Widget for &App {
                 AppState::CrearTarea => self.render_crear_tarea(area, buf),
                 AppState::VerTareas => self.render_ver_tareas(area, buf),
                 AppState::CompletarTarea => self.render_completar_tarea(area, buf),
-                AppState::Salir => self.render_salir(area, buf),
                 _ => {}
             }
+            self.render_warning(area, buf); //Add warning toast on top of current render
         }
         else{
         match self.state {
@@ -521,9 +700,9 @@ impl Widget for &App {
             AppState::VerTareas => self.render_ver_tareas(area, buf),
             AppState::CompletarTarea => self.render_completar_tarea(area, buf),
             AppState::EliminarTarea => self.render_eliminar_tarea(area, buf),
-            AppState::Salir => self.render_salir(area, buf),
             _ => {}
         }
     }
     }
+    
 }
