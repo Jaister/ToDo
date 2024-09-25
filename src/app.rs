@@ -14,6 +14,8 @@ use ratatui::{
     },
     DefaultTerminal, Frame,
 };
+use chrono::{Datelike, Local, Timelike};
+
 use crate::tarea::Tarea;
 use crate::tarea::{generar_id, guardar_json};
 use crate::ascii_art::Animation;
@@ -394,36 +396,71 @@ impl App {
             "<ESC> ".blue().bold(),
         ]));       
         let block = Block::bordered()
-            .title(title.alignment(Alignment::Center))
-            .title(
-                instructions
-                    .alignment(Alignment::Center)
-                    .position(Position::Bottom),
-            )
-            .border_set(border::THICK)
-            .border_style(ratatui::style::Style::default().fg(self.color_logic()));
-
+        .title(title.alignment(Alignment::Center))
+        .title(
+            instructions
+                .alignment(Alignment::Center)
+                .position(Position::Bottom),
+        )
+        .border_set(border::THICK)
+        .border_style(ratatui::style::Style::default().fg(self.color_logic()));
+    
         let counter_text = Text::from(vec![Line::from(vec![
             "Opcion: ".into(),
             self.opcion.to_string().yellow(),
         ])]);
 
+        
+        
         Paragraph::new(counter_text)
             .centered()
             .block(block)
             .render(area, buf);
-        let ascii_art = Animation::print_ascii_art(&self.animation);
-        let ascii_area = Rect {
-            x: area.x,
-            y: area.height/3,
-            width: area.width,
-            height: area.height - 3,
+        
+
+                //DISPLAY TIME ON TOP LEFT CORNER
+        let current_time = Local::now();
+        let time_text = Text::from(vec![Line::from(vec![
+            "Tiempo: ".into(),
+            format!("{:02}-{:02}-{:02}  {:02}:{:02}:{:02}",
+                current_time.year(),
+                current_time.month(),
+                current_time.day(), 
+                current_time.hour(), 
+                current_time.minute(),
+                current_time.second()).yellow(), // Format the time and apply yellow color
+        ])]);
+        // Render the counter text in the top right corner
+        let counter_area = Rect {
+            x: area.x + area.width - 55,
+            y: area.y,
+            width: 55,
+            height: 1,
         };
-        let ascii_art_text = Text::from(ascii_art);
-        Paragraph::new(ascii_art_text)
+        Paragraph::new(time_text)
             .block(Block::default().borders(ratatui::widgets::Borders::NONE))
-            .alignment(Alignment::Center)
+            .render(counter_area, buf);
+        // Assuming Animation::print_ascii_art returns a string representation of the ASCII art
+        let ascii_art = Animation::print_ascii_art(&self.animation);
+        let ascii_art_text = Text::from(ascii_art);
+        
+        // Create an area for the ASCII art
+        let ascii_width = ascii_art_text.width(); // Width of ASCII art
+        let ascii_height = ascii_art_text.height(); // Height of ASCII art
+        
+        // Calculate the centered area for ASCII art
+        let ascii_area = Rect {
+            x: area.x + (area.width as u16 - ascii_width as u16) / 2, // Centered x position
+            y: (area.height / 5)* 3 ,
+            width: ascii_width as u16, // Cast width to u16
+            height: ascii_height as u16, // Cast height to u16
+        };
+        
+        // Render the ASCII art paragraph within the centered area
+        Paragraph::new(ascii_art_text)
+            .block(Block::default().borders(ratatui::widgets::Borders::NONE)) // Optional: add borders to the ASCII art block
             .render(ascii_area, buf);
+        
     }
     ///////////////////////////////////////////
     /// CREAR TAREA RENDER
