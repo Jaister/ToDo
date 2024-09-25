@@ -2,12 +2,14 @@
 pub struct Animation {
     index: u8,
     delay: u64,
+    ascending: bool,
 }
 impl Default for Animation {
     fn default() -> Self {
         Self {
             index: 0,
             delay: 1000,
+            ascending: true,
         }
     }
 }
@@ -16,8 +18,33 @@ impl Animation {
         self.index = (self.index + 1) % 7;
         
     }
+    pub fn print_os_name(&self) -> String {
+        let vector = vec![
+            r#"
+
+     ██╗ █████╗ ██╗     ███████╗████████╗███████╗██████╗      ██████╗ ███████╗
+     ██║██╔══██╗██║     ██╔════╝╚══██╔══╝██╔════╝██╔══██╗    ██╔═══██╗██╔════╝
+     ██║███████║██║     ███████╗   ██║   █████╗  ██████╔╝    ██║   ██║███████╗
+██   ██║██╔══██║██║     ╚════██║   ██║   ██╔══╝  ██╔══██╗    ██║   ██║╚════██║
+╚█████╔╝██║  ██║███████╗███████║   ██║   ███████╗██║  ██║    ╚██████╔╝███████║
+ ╚════╝ ╚═╝  ╚═╝╚══════╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝     ╚═════╝ ╚══════╝
+                                                                              
+            "#.to_string(),
+        ];
+        vector[0].clone()
+    }
     pub fn next(&mut self) {
-        self.index = (self.index + 1) % 8;
+        if self.ascending {
+            self.index += 1;
+            if self.index == 4 {
+                self.ascending = false; // switch to descending
+            }
+        } else {
+            self.index -= 1;
+            if self.index == 0 {
+                self.ascending = true; // switch to ascending
+            }
+        }
     }
     pub fn delay(&self) -> u64 {
         self.delay

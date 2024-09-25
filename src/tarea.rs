@@ -1,11 +1,13 @@
 use std::fs;
 use std::fmt;
 use serde_json::{Result, Value, Error,json};
+use chrono::{NaiveDate};
 #[derive(Debug, Default)]
 pub struct Tarea {
     id: u32,
     descripcion: String,
     completada: bool,
+    fecha: NaiveDate,
 }
 
 impl Tarea{
@@ -20,11 +22,12 @@ impl Tarea{
     pub fn completada(&self) -> bool {
         self.completada
     }
-    pub fn crear_tarea(id: u32, descripcion: String,tareas: &mut Vec<Tarea> ) -> serde_json::Result<Tarea>{
+    pub fn crear_tarea(id: u32, descripcion: String, fecha:NaiveDate, tareas: &mut Vec<Tarea> ) -> serde_json::Result<Tarea>{
         let tarea = Tarea {
             id,
-            descripcion: descripcion,
+            descripcion,
             completada: false,
+            fecha,
         };
         tareas.push(tarea.clone());
         let _ = guardar_json(tareas);
@@ -46,10 +49,15 @@ impl Tarea{
                 let id = tarea["id"].as_u64().unwrap() as u32;
                 let descripcion = tarea["descripcion"].as_str().unwrap().to_string();
                 let completada = tarea["completada"].as_bool().unwrap();
+                let tarea_fecha = tarea["fecha"].as_str(); 
+
+                let fecha = NaiveDate::parse_from_str((tarea_fecha).unwrap(), "%Y-%m-%d").unwrap();
+                
                 tareas.push(Tarea {
                     id,
                     descripcion,
                     completada,
+                    fecha,
                 });
             }
         } else if let Some(object) = data.as_object() {
@@ -60,10 +68,12 @@ impl Tarea{
             let id = object["id"].as_u64().unwrap() as u32;
             let descripcion = object["descripcion"].as_str().unwrap().to_string();
             let completada = object["completada"].as_bool().unwrap();
+            let fecha = NaiveDate::parse_from_str(object["fecha"].as_str().unwrap(), "%Y-%m-%d").unwrap();
             tareas.push(Tarea {
                 id,
                 descripcion,
                 completada,
+                fecha,
             });
         }
         Ok(tareas)
@@ -75,7 +85,7 @@ impl Tarea{
         self.completada = false;
     }
     pub fn to_string(&self) -> String{
-        format!("{} - {} - {}", self.id, self.descripcion, self.completada)
+        format!("{} - {} - {} - {}", self.id, self.descripcion, self.completada, self.fecha)
     }
 
 }
@@ -96,6 +106,7 @@ impl Clone for Tarea{
             id: self.id,
             descripcion: self.descripcion.clone(),
             completada: self.completada,
+            fecha: self.fecha,
         }
     }
 }
@@ -114,6 +125,7 @@ pub fn guardar_json(tareas: &mut Vec<Tarea>) -> serde_json::Result<()>{
                 "id": tarea.id,
                 "descripcion": tarea.descripcion,
                 "completada": tarea.completada,
+                "fecha": tarea.fecha.format("%Y-%m-%d").to_string(),
             });
             json_array.push(tarea2);
         }

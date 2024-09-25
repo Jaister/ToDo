@@ -282,9 +282,11 @@ impl App {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "Descripción vacía")); // Proper io::Error
             
         }
+        let local_now = Local::now();
+        let fecha = local_now.date_naive();
     
         let id = generar_id(&self.tareas); //Cambiar a last fetched id + 1
-        match Tarea::crear_tarea(id, descripcion,&mut self.tareas){
+        match Tarea::crear_tarea(id, descripcion,fecha,&mut self.tareas){
             Ok(tarea) => Ok(tarea),
             Err(_e) => Err(io::Error::new(io::ErrorKind::InvalidInput, "Error al crear Tarea")), // Proper io::Error
             }
@@ -388,6 +390,26 @@ impl App {
                 title = Title::from(" Menu de Tareas ".bold());
             }
         }
+        //TITULO DEL OS
+        let title_os = Animation::print_os_name(&self.animation);
+        let title_os = Text::from(title_os).yellow();
+        
+        // Create an area for the ASCII art
+        let ascii_width = title_os.width(); // Width of ASCII art
+        let ascii_height = title_os.height(); // Height of ASCII art
+        
+        // Calculate the centered area for ASCII art
+        let ascii_area = Rect {
+            x: area.x + (area.width as u16 - ascii_width as u16) / 2, // Centered x position
+            y: (area.height / 4) ,
+            width: ascii_width as u16, // Cast width to u16
+            height: ascii_height as u16, // Cast height to u16
+        };
+        
+        // Render the ASCII art paragraph within the centered area
+        Paragraph::new(title_os)
+            .block(Block::default().borders(ratatui::widgets::Borders::NONE)) // Optional: add borders to the ASCII art block
+            .render(ascii_area, buf);
         let instructions = Title::from(Line::from(vec![
             "<Izda>".blue().bold(),
             " Opcion ".into(),
@@ -442,7 +464,7 @@ impl App {
             .render(counter_area, buf);
         // Assuming Animation::print_ascii_art returns a string representation of the ASCII art
         let ascii_art = Animation::print_ascii_art(&self.animation);
-        let ascii_art_text = Text::from(ascii_art);
+        let ascii_art_text = Text::from(ascii_art).yellow();
         
         // Create an area for the ASCII art
         let ascii_width = ascii_art_text.width(); // Width of ASCII art
