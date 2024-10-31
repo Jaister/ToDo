@@ -394,11 +394,11 @@ impl App {
         let title_os = Animation::print_os_name(&self.animation);
         let title_os = Text::from(title_os).yellow();
         
-        // Create an area for the ASCII art
+        // Create an area for the title ASCII art
         let ascii_width = title_os.width(); // Width of ASCII art
         let ascii_height = title_os.height(); // Height of ASCII art
-        
-        // Calculate the centered area for ASCII art
+        if area.height > 30 && area.width > 100{
+            // Calculate the centered area for ASCII art
         let ascii_area = Rect {
             x: area.x + (area.width as u16 - ascii_width as u16) / 2, // Centered x position
             y: (area.height / 4) ,
@@ -410,6 +410,7 @@ impl App {
         Paragraph::new(title_os)
             .block(Block::default().borders(ratatui::widgets::Borders::NONE)) // Optional: add borders to the ASCII art block
             .render(ascii_area, buf);
+        }
         let instructions = Title::from(Line::from(vec![
             "<Izda>".blue().bold(),
             " Opcion ".into(),
@@ -431,7 +432,7 @@ impl App {
             "Opcion: ".into(),
             self.opcion.to_string().yellow(),
         ])]);
-
+                
         
         
         Paragraph::new(counter_text)
@@ -440,7 +441,7 @@ impl App {
             .render(area, buf);
         
 
-                //DISPLAY TIME ON TOP LEFT CORNER
+        //DISPLAY TIME ON TOP LEFT CORNER
         let current_time = Local::now();
         let time_text = Text::from(vec![Line::from(vec![
             "Tiempo: ".into(),
@@ -469,20 +470,20 @@ impl App {
         // Create an area for the ASCII art
         let ascii_width = ascii_art_text.width(); // Width of ASCII art
         let ascii_height = ascii_art_text.height(); // Height of ASCII art
-        
-        // Calculate the centered area for ASCII art
+        if area.height > 50 && area.width > 100{
+            // Calculate the centered area for ASCII art
         let ascii_area = Rect {
             x: area.x + (area.width as u16 - ascii_width as u16) / 2, // Centered x position
             y: (area.height / 5)* 3 ,
             width: ascii_width as u16, // Cast width to u16
             height: ascii_height as u16, // Cast height to u16
         };
-        
         // Render the ASCII art paragraph within the centered area
         Paragraph::new(ascii_art_text)
             .block(Block::default().borders(ratatui::widgets::Borders::NONE)) // Optional: add borders to the ASCII art block
             .render(ascii_area, buf);
         
+        }
     }
     ///////////////////////////////////////////
     /// CREAR TAREA RENDER
