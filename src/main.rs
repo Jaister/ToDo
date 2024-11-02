@@ -1,11 +1,13 @@
 mod app;
 mod tarea;
 mod ascii_art;
+mod scraper;
 
 use std::io;
 use crate::app::App;
 use crate::tarea::Tarea;
 use crate::ascii_art::Animation;
+use crate::scraper::my_scraper;
 
 fn main() -> io::Result<()> {
     let tareas: Vec<Tarea> = match Tarea::leer_tareas() {

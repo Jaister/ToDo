@@ -4,12 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+arboard = "2.0"  # use the latest version available
 chrono = "0.4.38"
 colored = "2.1.0"
 crossterm = "0.28.1"
 ratatui = "0.28.1"
 serde = "1.0.210"
 serde_json = "1.0.128"
+scraper = "0.14"   # use the latest version available
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+
 
 [profile.release]
 panic = "abort"  # Optional: Reduces binary size

@@ -1,6 +1,7 @@
 use std::io;
 use serde_json::{Result, Value, Error,json};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use arboard::Clipboard;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
@@ -19,6 +20,7 @@ use chrono::{Datelike, Local, Timelike};
 use crate::tarea::Tarea;
 use crate::tarea::{generar_id, guardar_json};
 use crate::ascii_art::Animation;
+use crate::scraper::my_scraper;
 use std::time::{Duration, Instant};
 /////////////////////////////////
 /// APP
@@ -75,6 +77,7 @@ impl App {
                     AppState::CompletarTarea => self.handle_completar_tarea()?,
                     AppState::Warning => self.handle_warning()?,
                     AppState::EliminarTarea => self.handle_eliminar_tarea()?,
+                    AppState::Scraper => self.handle_scraper()?,
                     _ => {}
                 }
             }
@@ -221,6 +224,38 @@ impl App {
         }
         Ok(())
     }
+    fn handle_scraper(&mut self) -> io::Result<()> {
+        if let Event::Key(key_event) = event::read()? {
+            if key_event.kind == KeyEventKind::Press {
+                match key_event.code {
+                    KeyCode::Esc => self.exit(),
+                    KeyCode::Enter => {
+                        match my_scraper(self.current_input.clone().as_str()) {
+                            Ok(()) => {
+                                self.state = AppState::Menu;
+                            }
+                            Err(_e) => {
+                                self.set_warning();
+                            }
+                        }
+                        self.current_input.clear();
+                    }
+                    KeyCode::Backspace => {
+                        self.current_input.pop();
+                    }
+                    KeyCode::Char(c) => {
+                        self.current_input.push(c);
+                    }
+                    KeyCode::Down => {
+                        self.state = self.previous_state;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn handle_warning(&mut self) -> io::Result<()> {
         if let Event::Key(key_event) = event::read()? {
             if key_event.kind == KeyEventKind::Press {
@@ -265,8 +300,8 @@ impl App {
                 self.state = AppState::EliminarTarea;
             }
             5 => {
-                //Salida del programa
-                self.exit();}
+                self.state = AppState::Scraper;
+            }
             _ => {
                 self.set_warning();
             }
@@ -385,6 +420,9 @@ impl App {
             }
             4 => {
                 title = Title::from(" Eliminar Tarea ".bold());
+            }
+            5 => {
+                title = Title::from(" Scrapper ".bold());
             }
             _ => {
                 title = Title::from(" Menu de Tareas ".bold());
@@ -640,6 +678,46 @@ impl App {
         buf.set_style(area, ratatui::style::Style::default().bg(self.color_logic()));
         buf.set_style(input_area, ratatui::style::Style::default().bg(ratatui::style::Color::Black));
     }
+    ///////////////////////////////////////////
+    /// SCRAPER RENDER
+    /// ///////////////////////////////////////////
+    fn render_scraper(&self, area: Rect, buf: &mut Buffer) {
+        // Define a block with a title and border
+        let block = Block::default()
+            .title(" Web Scraping ".bold())
+            .borders(ratatui::widgets::Borders::ALL)
+            .border_style(ratatui::style::Style::default().fg(self.color_logic()));
+    
+        // Define the prompt text
+        let prompt_text = Text::from("URL a scrapear:".bold());
+    
+        // Define the input text (this could be dynamic if capturing input)
+        let input_text = Text::from(self.current_input.clone()); // Assuming you have an `input_description` field
+        // Render the prompt text
+        let prompt_paragraph = Paragraph::new(prompt_text)
+            .block(Block::default().borders(ratatui::widgets::Borders::NONE))
+            //.block(warning)
+            .alignment(Alignment::Left);
+        prompt_paragraph.render(area, buf);
+    
+        // Render the input text below the prompt
+        let input_area = Rect {
+            x: area.x,
+            y: area.y + 2, // Position the input text a bit below the prompt
+            width: area.width,
+            height: area.height - 2,
+        };
+        let input_paragraph = Paragraph::new(input_text)
+            .block(block)
+            .alignment(Alignment::Left);
+        input_paragraph.render(input_area, buf);
+        buf.set_style(area, ratatui::style::Style::default().bg(self.color_logic()));
+        // Optional: Draw a cursor or highlight the input area
+        buf.set_style(input_area, ratatui::style::Style::default().bg(ratatui::style::Color::Black));
+    }
+    ///////////////////////////////////////////
+    /// WARNING RENDER
+    ///////////////////////////////////////////
     fn color_logic(&self) -> ratatui::style::Color{
         if self.state == AppState::Warning {ratatui::style::Color::LightRed} else {ratatui::style::Color::Cyan}
     }
@@ -694,6 +772,7 @@ enum AppState {
     CompletarTarea,
     EliminarTarea,
     Warning,
+    Scraper,
 }
 impl Default for AppState {
     fn default() -> Self {
@@ -709,6 +788,7 @@ impl PartialEq for AppState {
             (AppState::CompletarTarea, AppState::CompletarTarea) => true,
             (AppState::EliminarTarea, AppState::EliminarTarea) => true,
             (AppState::Warning, AppState::Warning) => true,
+            (AppState::Scraper, AppState::Scraper) => true,
             _ => false,
         }
     }
@@ -743,6 +823,8 @@ impl Widget for &App {
                 AppState::CrearTarea => self.render_crear_tarea(area, buf),
                 AppState::VerTareas => self.render_ver_tareas(area, buf),
                 AppState::CompletarTarea => self.render_completar_tarea(area, buf),
+                AppState::EliminarTarea => self.render_eliminar_tarea(area, buf),
+                AppState::Scraper => self.render_scraper(area, buf),
                 _ => {}
             }
             self.render_warning(area, buf); //Add warning toast on top of current render
@@ -754,6 +836,7 @@ impl Widget for &App {
             AppState::VerTareas => self.render_ver_tareas(area, buf),
             AppState::CompletarTarea => self.render_completar_tarea(area, buf),
             AppState::EliminarTarea => self.render_eliminar_tarea(area, buf),
+            AppState::Scraper => self.render_scraper(area, buf),
             _ => {}
         }
     }
